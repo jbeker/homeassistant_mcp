@@ -21,7 +21,10 @@ class HAClient:
         try:
             resp = await self._client.get(path, **kwargs)
             resp.raise_for_status()
-            return resp.json()
+            content_type = resp.headers.get("content-type", "")
+            if "application/json" in content_type:
+                return resp.json()
+            return resp.text
         except httpx.HTTPStatusError as exc:
             return {"error": f"HTTP {exc.response.status_code}", "detail": exc.response.text}
         except httpx.RequestError as exc:

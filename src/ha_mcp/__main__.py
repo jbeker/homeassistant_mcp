@@ -37,13 +37,10 @@ def main(mode: str, transport: str, host: str, port: int) -> None:
         sys.exit(1)
 
     server = create_server(mode, ha_url, ha_token)
+    server.settings.host = host
+    server.settings.port = port
 
-    if transport == "stdio":
-        server.run(transport="stdio")
-    elif transport == "sse":
-        server.run(transport="sse", host=host, port=port)
-    elif transport == "streamable-http":
-        server.run(transport="streamable-http", host=host, port=port)
+    server.run(transport=transport)
 
 
 if __name__ == "__main__":
