@@ -1,0 +1,23 @@
+[project]
+name = "ha-mcp"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Jeremy Beker", email = "gothmog@confusticate.com" }
+]
+requires-python = ">=3.10"
+dependencies = [
+    "click>=8.3.1",
+    "httpx>=0.28.1",
+    "mcp[cli]>=1.26.0",
+    "python-dotenv>=1.2.2",
+    "uvicorn>=0.42.0",
+]
+
+[project.scripts]
+ha-mcp = "ha_mcp:main"
+
+[build-system]
+requires = ["uv_build>=0.9.7,<0.10.0"]
+build-backend = "uv_build"
