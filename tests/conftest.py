@@ -28,6 +28,8 @@ class FakeHAServer:
         self.handler = handler or (lambda cmd: {"echo": cmd["type"]})
         self.accept_auth = accept_auth
         self.received: list[dict] = []
+        # Event payloads emitted (in order) after a subscribe command is acked.
+        self.events: list = []
         self._server = None
         self.port: int | None = None
 
@@ -55,6 +57,16 @@ class FakeHAServer:
             async for raw in ws:
                 cmd = json.loads(raw)
                 self.received.append(cmd)
+                if cmd.get("type", "").startswith("subscribe"):
+                    # Ack the subscription, then stream the queued events on its id.
+                    await ws.send(
+                        json.dumps({"id": cmd["id"], "type": "result", "success": True, "result": None})
+                    )
+                    for event in self.events:
+                        await ws.send(
+                            json.dumps({"id": cmd["id"], "type": "event", "event": event})
+                        )
+                    continue
                 body = self.handler(cmd)
                 if body == "__SILENT__":
                     continue  # never reply — exercises the per-command timeout

@@ -21,6 +21,10 @@ from urllib.parse import urlsplit, urlunsplit
 import websockets
 from websockets.asyncio.client import ClientConnection, connect
 
+# Placed on a subscription's queue when the connection drops, so a waiting
+# consumer (e.g. wait_for_state) wakes up instead of hanging until its timeout.
+WS_CLOSED = object()
+
 
 class HAToolError(Exception):
     """A tool-level failure (validation, missing confirmation, HTTP error).
@@ -59,6 +63,7 @@ class HAWebSocketClient:
         self._id_lock = asyncio.Lock()
         self._conn_lock = asyncio.Lock()
         self._pending: dict[int, asyncio.Future] = {}
+        self._subscriptions: dict[int, asyncio.Queue] = {}
         self._reader_task: asyncio.Task | None = None
 
     # -- connection lifecycle -------------------------------------------------
@@ -104,12 +109,18 @@ class HAWebSocketClient:
             self._reader_task = asyncio.create_task(self._reader_loop(ws))
 
     async def _reader_loop(self, ws: ClientConnection) -> None:
-        """Own ``recv()`` for one connection; dispatch results to pending futures."""
+        """Own ``recv()`` for one connection; dispatch replies and events."""
         try:
             async for raw in ws:
                 msg = json.loads(raw)
-                if msg.get("type") != "result":
-                    continue  # ignore events/pong — subscriptions are out of scope
+                mtype = msg.get("type")
+                if mtype == "event":
+                    queue = self._subscriptions.get(msg.get("id"))
+                    if queue is not None:
+                        queue.put_nowait(msg.get("event"))
+                    continue
+                if mtype != "result":
+                    continue  # ignore pong and unknown frames
                 fut = self._pending.get(msg.get("id"))
                 if fut is None or fut.done():
                     continue
@@ -128,12 +139,18 @@ class HAWebSocketClient:
         finally:
             self._ws = None
             self._fail_pending("connection_lost", "WebSocket connection closed")
+            self._close_subscriptions()
 
     def _fail_pending(self, code: str, message: str) -> None:
         for fut in self._pending.values():
             if not fut.done():
                 fut.set_exception(HAWebSocketError(code, message))
         self._pending.clear()
+
+    def _close_subscriptions(self) -> None:
+        for queue in self._subscriptions.values():
+            queue.put_nowait(WS_CLOSED)
+        self._subscriptions.clear()
 
     async def _next_id(self) -> int:
         async with self._id_lock:
@@ -165,6 +182,48 @@ class HAWebSocketClient:
         finally:
             self._pending.pop(cid, None)
 
+    # -- subscriptions --------------------------------------------------------
+
+    async def subscribe(self, type: str, **fields: Any) -> tuple[int, asyncio.Queue]:
+        """Open a streaming subscription.
+
+        Returns ``(subscription_id, queue)``. The queue receives each ``event``
+        payload; on disconnect it receives the ``WS_CLOSED`` sentinel. Always
+        call ``unsubscribe(subscription_id)`` when done.
+
+        Raises HAWebSocketError if the subscription is not acknowledged.
+        """
+        await self._ensure_connected()
+        ws = self._ws
+        if ws is None:
+            raise HAWebSocketError("connection_lost", "WebSocket not connected")
+
+        cid = await self._next_id()
+        queue: asyncio.Queue = asyncio.Queue()
+        self._subscriptions[cid] = queue
+        fut: asyncio.Future = asyncio.get_running_loop().create_future()
+        self._pending[cid] = fut
+        try:
+            await ws.send(json.dumps({"id": cid, "type": type, **fields}))
+            await asyncio.wait_for(fut, self._command_timeout)  # await the ack
+        except asyncio.TimeoutError:
+            self._subscriptions.pop(cid, None)
+            raise HAWebSocketError("timeout", f"{type} subscribe timed out")
+        except BaseException:
+            self._subscriptions.pop(cid, None)
+            raise
+        finally:
+            self._pending.pop(cid, None)
+        return cid, queue
+
+    async def unsubscribe(self, subscription_id: int) -> None:
+        """Stop a subscription (best-effort; ignores a dropped connection)."""
+        self._subscriptions.pop(subscription_id, None)
+        try:
+            await self.ws_command("unsubscribe_events", subscription=subscription_id)
+        except HAWebSocketError:
+            pass
+
     async def close(self) -> None:
         """Cancel the reader, close the socket, and fail any pending commands."""
         task, self._reader_task = self._reader_task, None
@@ -181,3 +240,4 @@ class HAWebSocketClient:
                 pass
             self._ws = None
         self._fail_pending("connection_lost", "client closed")
+        self._close_subscriptions()
