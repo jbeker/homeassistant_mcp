@@ -12,9 +12,12 @@ from ha_mcp.server import create_server
 @click.command()
 @click.option(
     "--mode",
-    type=click.Choice(["read-only", "control-only", "read-write"]),
+    type=click.Choice(["read-only", "control-only", "read-write", "admin"]),
     default="read-only",
-    help="Access mode controlling which tools are exposed.",
+    help=(
+        "Access mode controlling which tools are exposed. 'admin' adds registry "
+        "and config editing (entity rename, automation/area/device edits)."
+    ),
 )
 @click.option(
     "--transport",
