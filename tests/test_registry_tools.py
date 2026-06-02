@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from ha_mcp.tools import config_edit, helpers, registry
+from ha_mcp.tools import backups, config_edit, helpers, registry
 from ha_mcp.ws_client import HAToolError
 
 
@@ -72,6 +72,12 @@ def _config_tools(ha, *, ws=None, admin=True):
 def _helper_tools(ws, *, admin=True):
     mcp = FakeMCP()
     helpers.register(mcp, ws=ws, admin=admin)
+    return mcp.tools
+
+
+def _backup_tools(ws, *, admin=True):
+    mcp = FakeMCP()
+    backups.register(mcp, ws=ws, admin=admin)
     return mcp.tools
 
 
@@ -361,3 +367,108 @@ def test_config_flow_tools_are_admin_only():
     tools = _config_tools(FakeHTTP(), admin=False)
     assert "start_config_flow" not in tools
     assert "submit_config_flow_step" not in tools
+
+
+# -- Options flows ------------------------------------------------------------
+
+
+async def test_start_options_flow_posts_entry_id_as_handler():
+    ha = FakeHTTP(response={"type": "form", "flow_id": "of1"})
+    tools = _config_tools(ha)
+    out = await tools["start_options_flow"]("entry123")
+    assert out["flow_id"] == "of1"
+    assert ha.calls[0] == (
+        "post",
+        "/api/config/config_entries/options/flow",
+        {"handler": "entry123", "show_advanced_options": False},
+    )
+
+
+async def test_submit_options_flow_step():
+    ha = FakeHTTP(response={"type": "create_entry"})
+    tools = _config_tools(ha)
+    await tools["submit_options_flow_step"]("of1", {"scan_interval": 30})
+    assert ha.calls[0] == (
+        "post",
+        "/api/config/config_entries/options/flow/of1",
+        {"scan_interval": 30},
+    )
+
+
+async def test_abort_options_flow_requires_confirm():
+    ha = FakeHTTP()
+    tools = _config_tools(ha)
+    with pytest.raises(HAToolError) as exc:
+        await tools["abort_options_flow"]("of1")
+    assert exc.value.code == "confirmation_required"
+    assert ha.calls == []
+
+
+# -- Group H: backups ---------------------------------------------------------
+
+
+async def test_list_backups():
+    ws = FakeWS(result={"backups": [{"backup_id": "b1"}]})
+    tools = _backup_tools(ws)
+    out = await tools["list_backups"]()
+    assert out == {"backups": [{"backup_id": "b1"}]}
+    assert ws.calls[0] == ("backup/info", {})
+
+
+async def test_create_backup_passes_options():
+    ws = FakeWS(result={"backup_job_id": "j1"})
+    tools = _backup_tools(ws)
+    await tools["create_backup"]({"name": "Pre-update", "agent_ids": ["backup.local"]})
+    assert ws.calls[0] == (
+        "backup/generate",
+        {"name": "Pre-update", "agent_ids": ["backup.local"]},
+    )
+
+
+async def test_create_backup_defaults_to_empty():
+    ws = FakeWS()
+    tools = _backup_tools(ws)
+    await tools["create_backup"]()
+    assert ws.calls[0] == ("backup/generate", {})
+
+
+async def test_delete_backup_requires_confirm():
+    ws = FakeWS()
+    tools = _backup_tools(ws)
+    with pytest.raises(HAToolError) as exc:
+        await tools["delete_backup"]("b1")
+    assert exc.value.code == "confirmation_required"
+    assert ws.calls == []
+
+
+async def test_delete_backup_with_confirm():
+    ws = FakeWS()
+    tools = _backup_tools(ws)
+    await tools["delete_backup"]("b1", confirm=True)
+    assert ws.calls[0] == ("backup/delete", {"backup_id": "b1"})
+
+
+async def test_restore_backup_requires_confirm():
+    ws = FakeWS()
+    tools = _backup_tools(ws)
+    with pytest.raises(HAToolError) as exc:
+        await tools["restore_backup"]("b1")
+    assert exc.value.code == "confirmation_required"
+    assert ws.calls == []
+
+
+async def test_restore_backup_with_confirm_and_options():
+    ws = FakeWS()
+    tools = _backup_tools(ws)
+    await tools["restore_backup"]("b1", confirm=True, options={"agent_id": "backup.local"})
+    assert ws.calls[0] == (
+        "backup/restore",
+        {"backup_id": "b1", "agent_id": "backup.local"},
+    )
+
+
+def test_backups_non_admin_omits_mutations():
+    tools = _backup_tools(FakeWS(), admin=False)
+    assert "list_backups" in tools
+    assert "create_backup" not in tools
+    assert "restore_backup" not in tools

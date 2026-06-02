@@ -188,6 +188,83 @@ def _register_config_entries(
             await ha.delete(f"/api/config/config_entries/flow/{flow_id}")
         )
 
+    # -- Options flows: EDIT an existing integration entry -------------------
+    #
+    # Same multi-step result handling as config flows, but against the parallel
+    # options endpoints. Here the flow's `handler` is the config entry_id, not a
+    # domain. Use this for entries that report supports_options: true.
+
+    @mcp.tool()
+    async def start_options_flow(
+        entry_id: str, show_advanced_options: bool = False
+    ) -> dict:
+        """Start an options flow to edit an existing integration entry.
+
+        Returns a flow result, handled exactly like start_config_flow: a 'form'
+        includes flow_id, step_id, data_schema, and errors; a 'create_entry'
+        includes the updated options; an 'abort' includes the reason.
+
+        Args:
+            entry_id: The config entry id to reconfigure (from list_config_entries).
+            show_advanced_options: Include advanced options in returned forms.
+        """
+        return _raise_on_error(
+            await ha.post(
+                "/api/config/config_entries/options/flow",
+                json={
+                    "handler": entry_id,
+                    "show_advanced_options": show_advanced_options,
+                },
+            )
+        )
+
+    @mcp.tool()
+    async def submit_options_flow_step(flow_id: str, user_input: dict) -> dict:
+        """Submit input for the current step of an options flow.
+
+        Returns the next flow result (another 'form', a 'create_entry', or an
+        'abort'). A 'form' whose `errors` field is populated means the input was
+        rejected — read the errors rather than retrying blindly.
+
+        Args:
+            flow_id: The flow id from start_options_flow.
+            user_input: Field keys to values for the current step (keys come
+                from the step's data_schema).
+        """
+        return _raise_on_error(
+            await ha.post(
+                f"/api/config/config_entries/options/flow/{flow_id}", json=user_input
+            )
+        )
+
+    @mcp.tool()
+    async def get_options_flow(flow_id: str) -> dict:
+        """Get the current step of an in-progress options flow.
+
+        Args:
+            flow_id: The flow id from start_options_flow.
+        """
+        return _raise_on_error(
+            await ha.get(f"/api/config/config_entries/options/flow/{flow_id}")
+        )
+
+    @mcp.tool()
+    async def abort_options_flow(flow_id: str, confirm: bool = False) -> dict:
+        """Abort (discard) an in-progress options flow.
+
+        Args:
+            flow_id: The flow id from start_options_flow.
+            confirm: Must be true to discard the in-progress flow.
+        """
+        if not confirm:
+            raise HAToolError(
+                "confirmation_required",
+                f"set confirm=true to abort options flow {flow_id}",
+            )
+        return _raise_on_error(
+            await ha.delete(f"/api/config/config_entries/options/flow/{flow_id}")
+        )
+
 
 def _register_kind(mcp: FastMCP, ha: HAClient, kind: str, admin: bool) -> None:
     base = f"/api/config/{kind}/config"

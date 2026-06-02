@@ -26,7 +26,7 @@ uv run ha-mcp --mode <mode>
 
 | Mode | Tools exposed |
 | --- | --- |
-| `read-only` (default) | REST reads, plus registry/config **reads**: `list_entity_registry`, `get_entity_registry_entry`, `get_*_config`, `list_labels`, `list_categories`, `list_helpers`, `list_config_entries` |
+| `read-only` (default) | REST reads, plus registry/config **reads**: `list_entity_registry`, `get_entity_registry_entry`, `get_*_config`, `list_labels`, `list_categories`, `list_helpers`, `list_config_entries`, `list_backups` |
 | `control-only` | read-only + `call_service` |
 | `read-write` | control-only + REST state/event writes |
 | `admin` | read-write + registry/config **mutations** (below) |
@@ -40,11 +40,16 @@ uv run ha-mcp --mode <mode>
 - **Labels / categories:** `create_label`/`update_label`/`delete_label`, `create_category`/`update_category`/`delete_category`
 - **Config entries (integrations):** `reload_config_entry`, `set_config_entry_disabled`, `delete_config_entry`
 - **Config flows (create a new integration entry):** `start_config_flow`, `submit_config_flow_step`, `get_config_flow`, `abort_config_flow`
+- **Options flows (edit an existing entry):** `start_options_flow`, `submit_options_flow_step`, `get_options_flow`, `abort_options_flow`
+- **Backups:** `create_backup`, `delete_backup`, `restore_backup`
 
 Destructive operations (`remove_entity_registry_entry`, `delete_area`,
 `delete_*_config`, `delete_helper`, `delete_label`, `delete_category`,
-`delete_config_entry`) require an explicit `confirm: true` argument and refuse to
-run without it. Renaming an entity migrates its recorder history automatically.
+`delete_config_entry`, `abort_config_flow`, `abort_options_flow`,
+`delete_backup`, `restore_backup`) require an explicit `confirm: true` argument
+and refuse to run without it. `restore_backup` is especially high risk — it can
+interrupt the running instance. Renaming an entity migrates its recorder history
+automatically.
 
 Config-entry-based helpers (template, group, threshold, derivative) are not
 storage collections and cannot be created via `create_helper`; they use the
