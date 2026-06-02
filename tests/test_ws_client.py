@@ -7,6 +7,7 @@ import asyncio
 import pytest
 
 from ha_mcp.ws_client import (
+    WS_CLOSED,
     HAWebSocketClient,
     HAWebSocketError,
     _derive_ws_url,
@@ -90,3 +91,24 @@ async def test_reconnect_after_drop(ws_client, fake_server):
     assert result == {"echo": "ping"}
     # Id counter reset on the fresh connection — first command is id 1 again.
     assert ws_client._id == 1
+
+
+async def test_subscribe_streams_events(ws_client, fake_server):
+    fake_server.events = [{"n": 1}, {"n": 2}]
+    sub_id, queue = await ws_client.subscribe("subscribe_trigger", trigger={"x": 1})
+    assert sub_id == 1
+    first = await asyncio.wait_for(queue.get(), 1.0)
+    second = await asyncio.wait_for(queue.get(), 1.0)
+    assert (first, second) == ({"n": 1}, {"n": 2})
+    await ws_client.unsubscribe(sub_id)
+    # unsubscribe_events was sent and the subscription is forgotten.
+    assert any(c["type"] == "unsubscribe_events" for c in fake_server.received)
+    assert sub_id not in ws_client._subscriptions
+
+
+async def test_subscription_gets_sentinel_on_close(ws_client, fake_server):
+    sub_id, queue = await ws_client.subscribe("subscribe_trigger", trigger={"x": 1})
+    # Drain the events the fake server emitted on subscribe (none configured here).
+    await ws_client.close()
+    item = await asyncio.wait_for(queue.get(), 1.0)
+    assert item is WS_CLOSED

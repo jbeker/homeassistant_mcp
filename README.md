@@ -26,7 +26,7 @@ uv run ha-mcp --mode <mode>
 
 | Mode | Tools exposed |
 | --- | --- |
-| `read-only` (default) | REST reads, plus registry/config **reads**: `list_entity_registry`, `get_entity_registry_entry`, `get_*_config`, `list_labels`, `list_categories`, `list_helpers`, `list_config_entries`, `list_backups` |
+| `read-only` (default) | REST reads, plus registry/config **reads**: `list_entity_registry`, `get_entity_registry_entry`, `get_*_config`, `list_labels`, `list_categories`, `list_helpers`, `list_config_entries`, `list_backups`, and `wait_for_state` |
 | `control-only` | read-only + `call_service` |
 | `read-write` | control-only + REST state/event writes |
 | `admin` | read-write + registry/config **mutations** (below) |
@@ -67,6 +67,15 @@ writable config object:
    A `form` with a populated `errors` field means the input was rejected.
 3. After `create_entry`, assign the new entities/device to an area with
    `update_entity_registry_entry` or `update_device` (area is not part of the flow).
+
+### Waiting for a state
+
+`wait_for_state(entity_id, target_state, timeout_seconds=30)` blocks until the
+entity reaches `target_state` (or returns immediately if it is already there),
+falling back to the last observed state on timeout. It opens a short-lived
+WebSocket subscription internally — useful after issuing a command that takes
+time to settle (e.g. waiting for `cover.garage` to reach `open`). For historical
+data use `get_history` / `get_logbook` instead.
 
 ## Development
 
