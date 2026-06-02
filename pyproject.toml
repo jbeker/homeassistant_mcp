@@ -13,6 +13,7 @@ dependencies = [
     "mcp[cli]>=1.26.0",
     "python-dotenv>=1.2.2",
     "uvicorn>=0.42.0",
+    "websockets>=13",
 ]
 
 [project.scripts]
@@ -21,3 +22,12 @@ ha-mcp = "ha_mcp:main"
 [build-system]
 requires = ["uv_build>=0.9.7,<0.10.0"]
 build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+    "pytest-asyncio>=1.4.0",
+]
