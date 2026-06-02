@@ -54,6 +54,22 @@ def register(mcp: FastMCP, ha: HAClient, ws: HAWebSocketClient, admin: bool) -> 
         """
         return await ws.ws_command("config/entity_registry/get", entity_id=entity_id)
 
+    # -- Group F: label & category registries (reads) ------------------------
+
+    @mcp.tool()
+    async def list_labels() -> list[dict]:
+        """List all labels (each with label_id, name, color, icon, description)."""
+        return await ws.ws_command("config/label_registry/list")
+
+    @mcp.tool()
+    async def list_categories(scope: str) -> list[dict]:
+        """List categories for a scope.
+
+        Args:
+            scope: The category scope (e.g. 'automation', 'script', 'todo').
+        """
+        return await ws.ws_command("config/category_registry/list", scope=scope)
+
     if not admin:
         return
 
@@ -210,6 +226,126 @@ def register(mcp: FastMCP, ha: HAClient, ws: HAWebSocketClient, admin: bool) -> 
             fields["disabled_by"] = "user" if disabled else None
         return await ws.ws_command(
             "config/device_registry/update", device_id=device_id, **fields
+        )
+
+    # -- Group F: label registry (mutations) ---------------------------------
+
+    @mcp.tool()
+    async def create_label(
+        name: str,
+        color: str | None = None,
+        icon: str | None = None,
+        description: str | None = None,
+    ) -> dict:
+        """Create a label. Returns the created label including label_id.
+
+        Assign labels to entities/devices via update_entity_registry_entry /
+        update_device.
+
+        Args:
+            name: Label name.
+            color: Optional color (e.g. 'primary', 'red').
+            icon: Optional MDI icon.
+            description: Optional description.
+        """
+        fields = _drop_none(color=color, icon=icon, description=description)
+        return await ws.ws_command("config/label_registry/create", name=name, **fields)
+
+    @mcp.tool()
+    async def update_label(
+        label_id: str,
+        name: str | None = None,
+        color: str | None = None,
+        icon: str | None = None,
+        description: str | None = None,
+    ) -> dict:
+        """Update a label.
+
+        Args:
+            label_id: The label to update.
+            name: New name.
+            color: New color.
+            icon: New MDI icon.
+            description: New description.
+        """
+        fields = _drop_none(name=name, color=color, icon=icon, description=description)
+        return await ws.ws_command(
+            "config/label_registry/update", label_id=label_id, **fields
+        )
+
+    @mcp.tool()
+    async def delete_label(label_id: str, confirm: bool = False) -> dict:
+        """Delete a label.
+
+        Args:
+            label_id: The label to delete.
+            confirm: Must be true to perform this destructive operation.
+        """
+        if not confirm:
+            raise HAToolError(
+                "confirmation_required", f"set confirm=true to delete label {label_id}"
+            )
+        return await ws.ws_command("config/label_registry/delete", label_id=label_id)
+
+    # -- Group F: category registry (mutations) ------------------------------
+
+    @mcp.tool()
+    async def create_category(
+        scope: str, name: str, icon: str | None = None
+    ) -> dict:
+        """Create a category within a scope. Returns the created category.
+
+        Args:
+            scope: The category scope (e.g. 'automation', 'script', 'todo').
+            name: Category name.
+            icon: Optional MDI icon.
+        """
+        fields = _drop_none(icon=icon)
+        return await ws.ws_command(
+            "config/category_registry/create", scope=scope, name=name, **fields
+        )
+
+    @mcp.tool()
+    async def update_category(
+        scope: str,
+        category_id: str,
+        name: str | None = None,
+        icon: str | None = None,
+    ) -> dict:
+        """Update a category.
+
+        Args:
+            scope: The category scope.
+            category_id: The category to update.
+            name: New name.
+            icon: New MDI icon.
+        """
+        fields = _drop_none(name=name, icon=icon)
+        return await ws.ws_command(
+            "config/category_registry/update",
+            scope=scope,
+            category_id=category_id,
+            **fields,
+        )
+
+    @mcp.tool()
+    async def delete_category(
+        scope: str, category_id: str, confirm: bool = False
+    ) -> dict:
+        """Delete a category.
+
+        Args:
+            scope: The category scope.
+            category_id: The category to delete.
+            confirm: Must be true to perform this destructive operation.
+        """
+        if not confirm:
+            raise HAToolError(
+                "confirmation_required",
+                f"set confirm=true to delete category {category_id}",
+            )
+        return await ws.ws_command(
+            "config/category_registry/delete", scope=scope, category_id=category_id
         )
 
 

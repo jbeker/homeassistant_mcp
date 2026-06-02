@@ -26,14 +26,42 @@ uv run ha-mcp --mode <mode>
 
 | Mode | Tools exposed |
 | --- | --- |
-| `read-only` (default) | REST reads, plus registry/config **reads** (`list_entity_registry`, `get_entity_registry_entry`, `get_automation_config`, …) |
+| `read-only` (default) | REST reads, plus registry/config **reads**: `list_entity_registry`, `get_entity_registry_entry`, `get_*_config`, `list_labels`, `list_categories`, `list_helpers`, `list_config_entries` |
 | `control-only` | read-only + `call_service` |
 | `read-write` | control-only + REST state/event writes |
-| `admin` | read-write + registry/config **mutations**: `rename_entity`, `update_entity_registry_entry`, `remove_entity_registry_entry`, `create_area`/`update_area`/`delete_area`, `update_device`, and `set_*_config`/`delete_*_config` for automations, scripts, and scenes |
+| `admin` | read-write + registry/config **mutations** (below) |
+
+### Admin mutation tools
+
+- **Entity registry:** `rename_entity`, `update_entity_registry_entry`, `remove_entity_registry_entry`
+- **Areas / devices:** `create_area`/`update_area`/`delete_area`, `update_device`
+- **Automations / scripts / scenes:** `set_*_config`/`delete_*_config`
+- **Helpers** (`input_boolean`, `input_number`, `input_text`, `input_select`, `input_datetime`, `input_button`, `counter`, `timer`, `schedule`): `create_helper`/`update_helper`/`delete_helper`
+- **Labels / categories:** `create_label`/`update_label`/`delete_label`, `create_category`/`update_category`/`delete_category`
+- **Config entries (integrations):** `reload_config_entry`, `set_config_entry_disabled`, `delete_config_entry`
+- **Config flows (create a new integration entry):** `start_config_flow`, `submit_config_flow_step`, `get_config_flow`, `abort_config_flow`
 
 Destructive operations (`remove_entity_registry_entry`, `delete_area`,
-`delete_*_config`) require an explicit `confirm: true` argument and refuse to run
-without it. Renaming an entity migrates its recorder history automatically.
+`delete_*_config`, `delete_helper`, `delete_label`, `delete_category`,
+`delete_config_entry`) require an explicit `confirm: true` argument and refuse to
+run without it. Renaming an entity migrates its recorder history automatically.
+
+Config-entry-based helpers (template, group, threshold, derivative) are not
+storage collections and cannot be created via `create_helper`; they use the
+integration config-flow instead.
+
+### Creating an integration (config flow)
+
+New UI-managed integrations are created through a multi-step flow rather than a
+writable config object:
+
+1. `start_config_flow(handler="<domain>")` — returns a `flow_id` and, for a
+   `form`, a `data_schema` listing the exact field keys.
+2. `submit_config_flow_step(flow_id, user_input)` — submit the step's fields;
+   repeat for each `form` until the result is `create_entry` (done) or `abort`.
+   A `form` with a populated `errors` field means the input was rejected.
+3. After `create_entry`, assign the new entities/device to an area with
+   `update_entity_registry_entry` or `update_device` (area is not part of the flow).
 
 ## Development
 

@@ -8,7 +8,7 @@ from typing import AsyncIterator
 from mcp.server.fastmcp import FastMCP
 
 from ha_mcp.client import HAClient
-from ha_mcp.tools import read, control, write, registry, config_edit
+from ha_mcp.tools import read, control, write, registry, config_edit, helpers
 from ha_mcp.ws_client import HAWebSocketClient
 
 
@@ -50,6 +50,7 @@ def create_server(mode: str, ha_url: str, ha_token: str) -> FastMCP:
 
     # Registry/config reads register in every mode; mutations gate behind admin.
     registry.register(mcp, ha_client, ws_client, admin=is_admin)
-    config_edit.register(mcp, ha_client, admin=is_admin)
+    config_edit.register(mcp, ha_client, ws_client, admin=is_admin)
+    helpers.register(mcp, ws_client, admin=is_admin)
 
     return mcp
