@@ -39,6 +39,7 @@ uv run ha-mcp --mode <mode>
 - **Helpers** (`input_boolean`, `input_number`, `input_text`, `input_select`, `input_datetime`, `input_button`, `counter`, `timer`, `schedule`): `create_helper`/`update_helper`/`delete_helper`
 - **Labels / categories:** `create_label`/`update_label`/`delete_label`, `create_category`/`update_category`/`delete_category`
 - **Config entries (integrations):** `reload_config_entry`, `set_config_entry_disabled`, `delete_config_entry`
+- **Config flows (create a new integration entry):** `start_config_flow`, `submit_config_flow_step`, `get_config_flow`, `abort_config_flow`
 
 Destructive operations (`remove_entity_registry_entry`, `delete_area`,
 `delete_*_config`, `delete_helper`, `delete_label`, `delete_category`,
@@ -48,6 +49,19 @@ run without it. Renaming an entity migrates its recorder history automatically.
 Config-entry-based helpers (template, group, threshold, derivative) are not
 storage collections and cannot be created via `create_helper`; they use the
 integration config-flow instead.
+
+### Creating an integration (config flow)
+
+New UI-managed integrations are created through a multi-step flow rather than a
+writable config object:
+
+1. `start_config_flow(handler="<domain>")` — returns a `flow_id` and, for a
+   `form`, a `data_schema` listing the exact field keys.
+2. `submit_config_flow_step(flow_id, user_input)` — submit the step's fields;
+   repeat for each `form` until the result is `create_entry` (done) or `abort`.
+   A `form` with a populated `errors` field means the input was rejected.
+3. After `create_entry`, assign the new entities/device to an area with
+   `update_entity_registry_entry` or `update_device` (area is not part of the flow).
 
 ## Development
 

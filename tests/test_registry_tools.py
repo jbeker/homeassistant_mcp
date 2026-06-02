@@ -308,3 +308,56 @@ def test_config_entries_non_admin_omits_mutations():
     assert "list_config_entries" in tools
     assert "delete_config_entry" not in tools
     assert "reload_config_entry" not in tools
+
+
+# -- Config flows (entry creation) --------------------------------------------
+
+
+async def test_start_config_flow_posts_handler():
+    ha = FakeHTTP(response={"type": "form", "flow_id": "f1", "data_schema": []})
+    tools = _config_tools(ha)
+    out = await tools["start_config_flow"]("dew_point")
+    assert out["flow_id"] == "f1"
+    assert ha.calls[0] == (
+        "post",
+        "/api/config/config_entries/flow",
+        {"handler": "dew_point", "show_advanced_options": False},
+    )
+
+
+async def test_submit_config_flow_step_posts_user_input():
+    ha = FakeHTTP(response={"type": "create_entry"})
+    tools = _config_tools(ha)
+    user_input = {"name": "Guest Bedroom", "temperature_sensor": "sensor.x"}
+    out = await tools["submit_config_flow_step"]("f1", user_input)
+    assert out == {"type": "create_entry"}
+    assert ha.calls[0] == ("post", "/api/config/config_entries/flow/f1", user_input)
+
+
+async def test_get_config_flow():
+    ha = FakeHTTP(response={"type": "form", "step_id": "user"})
+    tools = _config_tools(ha)
+    await tools["get_config_flow"]("f1")
+    assert ha.calls[0] == ("get", "/api/config/config_entries/flow/f1")
+
+
+async def test_abort_config_flow_requires_confirm():
+    ha = FakeHTTP()
+    tools = _config_tools(ha)
+    with pytest.raises(HAToolError) as exc:
+        await tools["abort_config_flow"]("f1")
+    assert exc.value.code == "confirmation_required"
+    assert ha.calls == []
+
+
+async def test_abort_config_flow_with_confirm():
+    ha = FakeHTTP(response={"ok": True})
+    tools = _config_tools(ha)
+    await tools["abort_config_flow"]("f1", confirm=True)
+    assert ha.calls[0] == ("delete", "/api/config/config_entries/flow/f1")
+
+
+def test_config_flow_tools_are_admin_only():
+    tools = _config_tools(FakeHTTP(), admin=False)
+    assert "start_config_flow" not in tools
+    assert "submit_config_flow_step" not in tools

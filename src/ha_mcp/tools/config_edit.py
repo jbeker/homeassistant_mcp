@@ -103,6 +103,91 @@ def _register_config_entries(
             await ha.delete(f"/api/config/config_entries/entry/{entry_id}")
         )
 
+    # -- Config flows: create a NEW integration entry ------------------------
+    #
+    # Creating/editing UI-managed integrations happens through multi-step flows,
+    # not a writable config object, so set_*_config does not apply. Each start
+    # and submit returns a flow result with a `type`: 'form' (more input needed),
+    # 'create_entry' (done), 'abort' (ended, e.g. duplicate), or 'menu' (choices).
+
+    @mcp.tool()
+    async def start_config_flow(
+        handler: str, show_advanced_options: bool = False
+    ) -> dict:
+        """Start a config flow to create a new integration entry.
+
+        Returns a flow result. For a 'form' result the response includes
+        flow_id, step_id, data_schema, and errors — the data_schema defines the
+        exact field keys, so the next submit_config_flow_step needs no guessing.
+        A 'create_entry' result includes the new entry; an 'abort' includes the
+        reason; a 'menu' includes choices (submit the chosen next_step_id).
+
+        Area assignment is usually not part of the flow — after create_entry,
+        set the area with update_entity_registry_entry or update_device.
+
+        Args:
+            handler: The integration domain to set up (e.g. 'dew_point').
+            show_advanced_options: Include advanced options in returned forms.
+        """
+        return _raise_on_error(
+            await ha.post(
+                "/api/config/config_entries/flow",
+                json={
+                    "handler": handler,
+                    "show_advanced_options": show_advanced_options,
+                },
+            )
+        )
+
+    @mcp.tool()
+    async def submit_config_flow_step(flow_id: str, user_input: dict) -> dict:
+        """Submit input for the current step of a config flow.
+
+        Returns the next flow result (another 'form', a 'create_entry', or an
+        'abort'). A 'form' whose `errors` field is populated means the input was
+        rejected — read the errors rather than retrying blindly.
+
+        Args:
+            flow_id: The flow id from start_config_flow.
+            user_input: Field keys to values for the current step (keys come
+                from the step's data_schema).
+        """
+        return _raise_on_error(
+            await ha.post(
+                f"/api/config/config_entries/flow/{flow_id}", json=user_input
+            )
+        )
+
+    @mcp.tool()
+    async def get_config_flow(flow_id: str) -> dict:
+        """Get the current step of an in-progress config flow.
+
+        Useful for recovery if a submit response was lost.
+
+        Args:
+            flow_id: The flow id from start_config_flow.
+        """
+        return _raise_on_error(
+            await ha.get(f"/api/config/config_entries/flow/{flow_id}")
+        )
+
+    @mcp.tool()
+    async def abort_config_flow(flow_id: str, confirm: bool = False) -> dict:
+        """Abort (discard) an in-progress config flow.
+
+        Args:
+            flow_id: The flow id from start_config_flow.
+            confirm: Must be true to discard the in-progress flow.
+        """
+        if not confirm:
+            raise HAToolError(
+                "confirmation_required",
+                f"set confirm=true to abort config flow {flow_id}",
+            )
+        return _raise_on_error(
+            await ha.delete(f"/api/config/config_entries/flow/{flow_id}")
+        )
+
 
 def _register_kind(mcp: FastMCP, ha: HAClient, kind: str, admin: bool) -> None:
     base = f"/api/config/{kind}/config"
