@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from ha_mcp.tools import config_edit, registry
+from ha_mcp.tools import config_edit, helpers, registry
 from ha_mcp.ws_client import HAToolError
 
 
@@ -63,9 +63,15 @@ def _registry_tools(ws, *, admin=True):
     return mcp.tools
 
 
-def _config_tools(ha, *, admin=True):
+def _config_tools(ha, *, ws=None, admin=True):
     mcp = FakeMCP()
-    config_edit.register(mcp, ha=ha, admin=admin)
+    config_edit.register(mcp, ha=ha, ws=ws or FakeWS(), admin=admin)
+    return mcp.tools
+
+
+def _helper_tools(ws, *, admin=True):
+    mcp = FakeMCP()
+    helpers.register(mcp, ws=ws, admin=admin)
     return mcp.tools
 
 
@@ -175,3 +181,130 @@ async def test_set_config_reads_back():
     out = await tools["set_automation_config"]("abc", {"alias": "Test"})
     assert out == {"alias": "Test", "trigger": []}
     assert [c[0] for c in ha.calls] == ["post", "get"]  # write then read-back
+
+
+# -- Group E: helpers ---------------------------------------------------------
+
+
+async def test_create_helper_passes_fields():
+    ws = FakeWS(result={"id": "h1", "name": "Vacation"})
+    tools = _helper_tools(ws)
+    out = await tools["create_helper"]("input_boolean", {"name": "Vacation"})
+    assert out == {"id": "h1", "name": "Vacation"}
+    assert ws.calls[0] == ("input_boolean/create", {"name": "Vacation"})
+
+
+async def test_update_helper_uses_domain_id_key():
+    ws = FakeWS()
+    tools = _helper_tools(ws)
+    await tools["update_helper"]("input_number", "abc", {"max": 50})
+    assert ws.calls[0] == ("input_number/update", {"input_number_id": "abc", "max": 50})
+
+
+async def test_delete_helper_requires_confirm():
+    ws = FakeWS()
+    tools = _helper_tools(ws)
+    with pytest.raises(HAToolError) as exc:
+        await tools["delete_helper"]("counter", "c1")
+    assert exc.value.code == "confirmation_required"
+    assert ws.calls == []
+
+
+async def test_delete_helper_uses_domain_id_key():
+    ws = FakeWS()
+    tools = _helper_tools(ws)
+    await tools["delete_helper"]("schedule", "s1", confirm=True)
+    assert ws.calls[0] == ("schedule/delete", {"schedule_id": "s1"})
+
+
+async def test_helper_rejects_unknown_domain():
+    ws = FakeWS()
+    tools = _helper_tools(ws)
+    with pytest.raises(HAToolError) as exc:
+        await tools["list_helpers"]("template")
+    assert exc.value.code == "invalid_helper_domain"
+    assert ws.calls == []
+
+
+def test_helpers_non_admin_omits_mutations():
+    tools = _helper_tools(FakeWS(), admin=False)
+    assert "list_helpers" in tools
+    assert "create_helper" not in tools
+
+
+# -- Group F: labels & categories ---------------------------------------------
+
+
+async def test_create_label_drops_none():
+    ws = FakeWS(result={"label_id": "l1"})
+    tools = _registry_tools(ws)
+    await tools["create_label"]("Critical", color="red")
+    cmd, fields = ws.calls[0]
+    assert cmd == "config/label_registry/create"
+    assert fields == {"name": "Critical", "color": "red"}  # icon/description dropped
+
+
+async def test_delete_label_requires_confirm():
+    ws = FakeWS()
+    tools = _registry_tools(ws)
+    with pytest.raises(HAToolError) as exc:
+        await tools["delete_label"]("l1")
+    assert exc.value.code == "confirmation_required"
+    assert ws.calls == []
+
+
+async def test_category_tools_pass_scope():
+    ws = FakeWS(result={"category_id": "c1"})
+    tools = _registry_tools(ws)
+    await tools["create_category"]("automation", "Lighting")
+    assert ws.calls[0] == (
+        "config/category_registry/create",
+        {"scope": "automation", "name": "Lighting"},
+    )
+    await tools["delete_category"]("automation", "c1", confirm=True)
+    assert ws.calls[1] == (
+        "config/category_registry/delete",
+        {"scope": "automation", "category_id": "c1"},
+    )
+
+
+async def test_list_categories_passes_scope():
+    ws = FakeWS(result=[{"category_id": "c1"}])
+    tools = _registry_tools(ws)
+    await tools["list_categories"]("script")
+    assert ws.calls[0] == ("config/category_registry/list", {"scope": "script"})
+
+
+# -- Group G: config entries --------------------------------------------------
+
+
+async def test_list_config_entries_filters_domain():
+    ws = FakeWS(result=[{"domain": "hue", "entry_id": "1"}, {"domain": "mqtt", "entry_id": "2"}])
+    tools = _config_tools(FakeHTTP(), ws=ws)
+    out = await tools["list_config_entries"](domain="hue")
+    assert [e["entry_id"] for e in out] == ["1"]
+
+
+async def test_set_config_entry_disabled_maps_disabled_by():
+    ws = FakeWS()
+    tools = _config_tools(FakeHTTP(), ws=ws)
+    await tools["set_config_entry_disabled"]("e1", True)
+    assert ws.calls[0] == ("config_entries/disable", {"entry_id": "e1", "disabled_by": "user"})
+    await tools["set_config_entry_disabled"]("e1", False)
+    assert ws.calls[1] == ("config_entries/disable", {"entry_id": "e1", "disabled_by": None})
+
+
+async def test_delete_config_entry_requires_confirm():
+    ha = FakeHTTP()
+    tools = _config_tools(ha)
+    with pytest.raises(HAToolError) as exc:
+        await tools["delete_config_entry"]("e1")
+    assert exc.value.code == "confirmation_required"
+    assert ha.calls == []
+
+
+def test_config_entries_non_admin_omits_mutations():
+    tools = _config_tools(FakeHTTP(), admin=False)
+    assert "list_config_entries" in tools
+    assert "delete_config_entry" not in tools
+    assert "reload_config_entry" not in tools
