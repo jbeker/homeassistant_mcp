@@ -18,7 +18,7 @@ class FakeMCP:
     def __init__(self) -> None:
         self.tools: dict[str, callable] = {}
 
-    def tool(self, name: str | None = None):
+    def tool(self, name: str | None = None, **kwargs):
         def deco(fn):
             self.tools[name or fn.__name__] = fn
             return fn

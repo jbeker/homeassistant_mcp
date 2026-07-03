@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from ha_mcp.tools._annotations import mutation, read_only
 from ha_mcp.ws_client import HAToolError
 
 if TYPE_CHECKING:
@@ -44,7 +45,7 @@ def _register_config_entries(
 ) -> None:
     """Group G: config entries / integrations."""
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only("List Config Entries"))
     async def list_config_entries(domain: str | None = None) -> list[dict]:
         """List config entries (integrations).
 
@@ -61,7 +62,7 @@ def _register_config_entries(
     if not admin:
         return
 
-    @mcp.tool()
+    @mcp.tool(annotations=mutation("Reload Config Entry", idempotent=True))
     async def reload_config_entry(entry_id: str) -> dict:
         """Reload a config entry (re-initialize the integration).
 
@@ -72,7 +73,7 @@ def _register_config_entries(
             await ha.post(f"/api/config/config_entries/entry/{entry_id}/reload")
         )
 
-    @mcp.tool()
+    @mcp.tool(annotations=mutation("Set Config Entry Disabled", idempotent=True))
     async def set_config_entry_disabled(entry_id: str, disabled: bool) -> dict:
         """Enable or disable a config entry.
 
@@ -86,7 +87,9 @@ def _register_config_entries(
             disabled_by="user" if disabled else None,
         )
 
-    @mcp.tool()
+    @mcp.tool(
+        annotations=mutation("Delete Config Entry", destructive=True, idempotent=True)
+    )
     async def delete_config_entry(entry_id: str, confirm: bool = False) -> dict:
         """Delete (remove) a config entry.
 
@@ -110,7 +113,7 @@ def _register_config_entries(
     # and submit returns a flow result with a `type`: 'form' (more input needed),
     # 'create_entry' (done), 'abort' (ended, e.g. duplicate), or 'menu' (choices).
 
-    @mcp.tool()
+    @mcp.tool(annotations=mutation("Start Config Flow"))
     async def start_config_flow(
         handler: str, show_advanced_options: bool = False
     ) -> dict:
@@ -139,7 +142,7 @@ def _register_config_entries(
             )
         )
 
-    @mcp.tool()
+    @mcp.tool(annotations=mutation("Submit Config Flow Step"))
     async def submit_config_flow_step(flow_id: str, user_input: dict) -> dict:
         """Submit input for the current step of a config flow.
 
@@ -158,7 +161,7 @@ def _register_config_entries(
             )
         )
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only("Get Config Flow"))
     async def get_config_flow(flow_id: str) -> dict:
         """Get the current step of an in-progress config flow.
 
@@ -171,7 +174,9 @@ def _register_config_entries(
             await ha.get(f"/api/config/config_entries/flow/{flow_id}")
         )
 
-    @mcp.tool()
+    @mcp.tool(
+        annotations=mutation("Abort Config Flow", destructive=True, idempotent=True)
+    )
     async def abort_config_flow(flow_id: str, confirm: bool = False) -> dict:
         """Abort (discard) an in-progress config flow.
 
@@ -194,7 +199,7 @@ def _register_config_entries(
     # options endpoints. Here the flow's `handler` is the config entry_id, not a
     # domain. Use this for entries that report supports_options: true.
 
-    @mcp.tool()
+    @mcp.tool(annotations=mutation("Start Options Flow"))
     async def start_options_flow(
         entry_id: str, show_advanced_options: bool = False
     ) -> dict:
@@ -218,7 +223,7 @@ def _register_config_entries(
             )
         )
 
-    @mcp.tool()
+    @mcp.tool(annotations=mutation("Submit Options Flow Step"))
     async def submit_options_flow_step(flow_id: str, user_input: dict) -> dict:
         """Submit input for the current step of an options flow.
 
@@ -237,7 +242,7 @@ def _register_config_entries(
             )
         )
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only("Get Options Flow"))
     async def get_options_flow(flow_id: str) -> dict:
         """Get the current step of an in-progress options flow.
 
@@ -248,7 +253,9 @@ def _register_config_entries(
             await ha.get(f"/api/config/config_entries/options/flow/{flow_id}")
         )
 
-    @mcp.tool()
+    @mcp.tool(
+        annotations=mutation("Abort Options Flow", destructive=True, idempotent=True)
+    )
     async def abort_options_flow(flow_id: str, confirm: bool = False) -> dict:
         """Abort (discard) an in-progress options flow.
 
@@ -269,7 +276,10 @@ def _register_config_entries(
 def _register_kind(mcp: FastMCP, ha: HAClient, kind: str, admin: bool) -> None:
     base = f"/api/config/{kind}/config"
 
-    @mcp.tool(name=f"get_{kind}_config")
+    @mcp.tool(
+        name=f"get_{kind}_config",
+        annotations=read_only(f"Get {kind.capitalize()} Config"),
+    )
     async def get_config(object_id: str) -> dict:
         return _raise_on_error(await ha.get(f"{base}/{object_id}"))
 
@@ -282,7 +292,10 @@ def _register_kind(mcp: FastMCP, ha: HAClient, kind: str, admin: bool) -> None:
     if not admin:
         return
 
-    @mcp.tool(name=f"set_{kind}_config")
+    @mcp.tool(
+        name=f"set_{kind}_config",
+        annotations=mutation(f"Set {kind.capitalize()} Config", idempotent=True),
+    )
     async def set_config(object_id: str, config: dict) -> dict:
         """Create or update the config, then return the item read back."""
         _raise_on_error(await ha.post(f"{base}/{object_id}", json=config))
@@ -297,7 +310,12 @@ def _register_kind(mcp: FastMCP, ha: HAClient, kind: str, admin: bool) -> None:
         f"        config: The full {kind} configuration body."
     )
 
-    @mcp.tool(name=f"delete_{kind}_config")
+    @mcp.tool(
+        name=f"delete_{kind}_config",
+        annotations=mutation(
+            f"Delete {kind.capitalize()} Config", destructive=True, idempotent=True
+        ),
+    )
     async def delete_config(object_id: str, confirm: bool = False) -> dict:
         if not confirm:
             raise HAToolError(

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ha_mcp.tools._annotations import mutation, read_only
 from ha_mcp.ws_client import HAToolError
 
 if TYPE_CHECKING:
@@ -22,7 +23,7 @@ if TYPE_CHECKING:
 
 
 def register(mcp: FastMCP, ws: HAWebSocketClient, admin: bool) -> None:
-    @mcp.tool()
+    @mcp.tool(annotations=read_only("List Backups"))
     async def list_backups() -> dict:
         """List available backups and backup-system status.
 
@@ -34,7 +35,7 @@ def register(mcp: FastMCP, ws: HAWebSocketClient, admin: bool) -> None:
     if not admin:
         return
 
-    @mcp.tool()
+    @mcp.tool(annotations=mutation("Create Backup"))
     async def create_backup(options: dict | None = None) -> dict:
         """Create a new backup.
 
@@ -47,7 +48,9 @@ def register(mcp: FastMCP, ws: HAWebSocketClient, admin: bool) -> None:
         """
         return await ws.ws_command("backup/generate", **(options or {}))
 
-    @mcp.tool()
+    @mcp.tool(
+        annotations=mutation("Delete Backup", destructive=True, idempotent=True)
+    )
     async def delete_backup(backup_id: str, confirm: bool = False) -> dict:
         """Delete a backup.
 
@@ -62,7 +65,7 @@ def register(mcp: FastMCP, ws: HAWebSocketClient, admin: bool) -> None:
             )
         return await ws.ws_command("backup/delete", backup_id=backup_id)
 
-    @mcp.tool()
+    @mcp.tool(annotations=mutation("Restore Backup", destructive=True))
     async def restore_backup(
         backup_id: str, confirm: bool = False, options: dict | None = None
     ) -> dict:

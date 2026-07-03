@@ -8,33 +8,35 @@ import json
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
+from ha_mcp.tools._annotations import read_only
+
 if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
     from ha_mcp.client import HAClient
 
 
 def register(mcp: FastMCP, ha: HAClient) -> None:
-    @mcp.tool()
+    @mcp.tool(annotations=read_only("Check API"))
     async def check_api() -> dict:
         """Check if the Home Assistant API is running."""
         return await ha.get("/api/")
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only("Get Configuration"))
     async def get_config() -> dict:
         """Get Home Assistant configuration."""
         return await ha.get("/api/config")
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only("List Components"))
     async def list_components() -> list:
         """List all loaded Home Assistant components."""
         return await ha.get("/api/components")
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only("List Event Types"))
     async def list_events() -> list:
         """List all available event types."""
         return await ha.get("/api/events")
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only("List Areas"))
     async def list_areas() -> list:
         """List all areas (rooms/zones) defined in Home Assistant."""
         template = (
@@ -47,7 +49,7 @@ def register(mcp: FastMCP, ha: HAClient) -> None:
         result = await ha.post("/api/template", json={"template": template})
         return json.loads(result)
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only("List Devices"))
     async def list_devices(area_id: str | None = None) -> list:
         """List all registered devices.
 
@@ -72,7 +74,7 @@ def register(mcp: FastMCP, ha: HAClient) -> None:
         result = await ha.post("/api/template", json={"template": template})
         return json.loads(result)
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only("List Services"))
     async def list_services(domain: str | None = None) -> list:
         """List all available services.
 
@@ -84,7 +86,7 @@ def register(mcp: FastMCP, ha: HAClient) -> None:
             services = [s for s in services if s.get("domain") == domain]
         return services
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only("List Entities"))
     async def list_entities(
         domain: str | None = None,
         name_filter: str | None = None,
@@ -114,7 +116,7 @@ def register(mcp: FastMCP, ha: HAClient) -> None:
             })
         return results
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only("Get Entity States"))
     async def get_entity_states(entity_ids: list[str]) -> list[dict]:
         """Get full state for multiple entities in one call.
 
@@ -133,7 +135,7 @@ def register(mcp: FastMCP, ha: HAClient) -> None:
                 out.append(result)
         return out
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only("Get All States"))
     async def get_all_states(domain: str | None = None) -> list:
         """Get states of all entities.
 
@@ -145,7 +147,7 @@ def register(mcp: FastMCP, ha: HAClient) -> None:
             states = [s for s in states if s["entity_id"].startswith(f"{domain}.")]
         return states
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only("Get Entity State"))
     async def get_entity_state(entity_id: str) -> dict:
         """Get the state of a specific entity.
 
@@ -154,7 +156,7 @@ def register(mcp: FastMCP, ha: HAClient) -> None:
         """
         return await ha.get(f"/api/states/{entity_id}")
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only("Get Error Log"))
     async def get_error_log(lines: int | None = None) -> str:
         """Get the Home Assistant error log.
 
@@ -168,7 +170,7 @@ def register(mcp: FastMCP, ha: HAClient) -> None:
             return "\n".join(log_lines[-lines:])
         return log
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only("Get Camera Image"))
     async def get_camera_image(entity_id: str) -> str:
         """Get a camera image as base64-encoded PNG.
 
@@ -178,12 +180,12 @@ def register(mcp: FastMCP, ha: HAClient) -> None:
         raw = await ha.get_raw(f"/api/camera_proxy/{entity_id}")
         return base64.b64encode(raw).decode()
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only("List Calendars"))
     async def list_calendars() -> list:
         """List all calendar entities."""
         return await ha.get("/api/calendars")
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only("Get Calendar Events"))
     async def get_calendar_events(entity_id: str, start: str, end: str) -> list:
         """Get events from a calendar within a time range.
 
@@ -197,7 +199,7 @@ def register(mcp: FastMCP, ha: HAClient) -> None:
             params={"start": start, "end": end},
         )
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only("Get History"))
     async def get_history(
         timestamp: str | None = None,
         entity_id: str | None = None,
@@ -221,7 +223,7 @@ def register(mcp: FastMCP, ha: HAClient) -> None:
             params["end_time"] = end_time
         return await ha.get(f"/api/history/period/{timestamp}", params=params)
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only("Get Logbook"))
     async def get_logbook(
         timestamp: str | None = None,
         entity_id: str | None = None,
@@ -244,7 +246,7 @@ def register(mcp: FastMCP, ha: HAClient) -> None:
             params["end_time"] = end_time
         return await ha.get(f"/api/logbook/{timestamp}", params=params)
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only("Render Template"))
     async def render_template(template: str) -> str:
         """Render a Jinja2 template against Home Assistant state.
 
@@ -253,7 +255,7 @@ def register(mcp: FastMCP, ha: HAClient) -> None:
         """
         return await ha.post("/api/template", json={"template": template})
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only("Check Configuration"))
     async def check_config() -> dict:
         """Check the Home Assistant configuration for errors."""
         return await ha.post("/api/config/core/check_config")

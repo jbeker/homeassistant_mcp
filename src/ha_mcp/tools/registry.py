@@ -9,6 +9,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
+from ha_mcp.tools._annotations import mutation, read_only
 from ha_mcp.ws_client import HAToolError
 
 if TYPE_CHECKING:
@@ -24,7 +25,7 @@ _ENTITY_ID_RE = re.compile(r"^[a-z0-9_]+\.[a-z0-9_]+$")
 def register(mcp: FastMCP, ha: HAClient, ws: HAWebSocketClient, admin: bool) -> None:
     # -- Group A: entity registry (reads) ------------------------------------
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only("List Entity Registry"))
     async def list_entity_registry(
         domain: str | None = None,
         area_id: str | None = None,
@@ -45,7 +46,7 @@ def register(mcp: FastMCP, ha: HAClient, ws: HAWebSocketClient, admin: bool) -> 
             entries = [e for e in entries if e.get("area_id") == area_id]
         return entries
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only("Get Entity Registry Entry"))
     async def get_entity_registry_entry(entity_id: str) -> dict:
         """Get the full entity registry entry, including unique_id.
 
@@ -56,12 +57,12 @@ def register(mcp: FastMCP, ha: HAClient, ws: HAWebSocketClient, admin: bool) -> 
 
     # -- Group F: label & category registries (reads) ------------------------
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only("List Labels"))
     async def list_labels() -> list[dict]:
         """List all labels (each with label_id, name, color, icon, description)."""
         return await ws.ws_command("config/label_registry/list")
 
-    @mcp.tool()
+    @mcp.tool(annotations=read_only("List Categories"))
     async def list_categories(scope: str) -> list[dict]:
         """List categories for a scope.
 
@@ -75,7 +76,9 @@ def register(mcp: FastMCP, ha: HAClient, ws: HAWebSocketClient, admin: bool) -> 
 
     # -- Group A: entity registry (mutations) --------------------------------
 
-    @mcp.tool()
+    @mcp.tool(
+        annotations=mutation("Update Entity Registry Entry", idempotent=True)
+    )
     async def update_entity_registry_entry(entity_id: str, updates: dict) -> dict:
         """Update entity registry fields.
 
@@ -89,7 +92,7 @@ def register(mcp: FastMCP, ha: HAClient, ws: HAWebSocketClient, admin: bool) -> 
             "config/entity_registry/update", entity_id=entity_id, **updates
         )
 
-    @mcp.tool()
+    @mcp.tool(annotations=mutation("Rename Entity"))
     async def rename_entity(entity_id: str, new_entity_id: str) -> dict:
         """Change an entity's entity_id. History migrates automatically.
 
@@ -122,7 +125,11 @@ def register(mcp: FastMCP, ha: HAClient, ws: HAWebSocketClient, admin: bool) -> 
             new_entity_id=new_entity_id,
         )
 
-    @mcp.tool()
+    @mcp.tool(
+        annotations=mutation(
+            "Remove Entity Registry Entry", destructive=True, idempotent=True
+        )
+    )
     async def remove_entity_registry_entry(entity_id: str, confirm: bool = False) -> dict:
         """Remove an entity registry entry (only if the platform allows it).
 
@@ -139,7 +146,7 @@ def register(mcp: FastMCP, ha: HAClient, ws: HAWebSocketClient, admin: bool) -> 
 
     # -- Group C: area registry (mutations) ----------------------------------
 
-    @mcp.tool()
+    @mcp.tool(annotations=mutation("Create Area"))
     async def create_area(
         name: str,
         icon: str | None = None,
@@ -159,7 +166,7 @@ def register(mcp: FastMCP, ha: HAClient, ws: HAWebSocketClient, admin: bool) -> 
         fields = _drop_none(icon=icon, floor_id=floor_id, aliases=aliases, labels=labels)
         return await ws.ws_command("config/area_registry/create", name=name, **fields)
 
-    @mcp.tool()
+    @mcp.tool(annotations=mutation("Update Area", idempotent=True))
     async def update_area(
         area_id: str,
         name: str | None = None,
@@ -186,7 +193,9 @@ def register(mcp: FastMCP, ha: HAClient, ws: HAWebSocketClient, admin: bool) -> 
         )
         return await ws.ws_command("config/area_registry/update", area_id=area_id, **fields)
 
-    @mcp.tool()
+    @mcp.tool(
+        annotations=mutation("Delete Area", destructive=True, idempotent=True)
+    )
     async def delete_area(area_id: str, confirm: bool = False) -> dict:
         """Delete an area.
 
@@ -202,7 +211,7 @@ def register(mcp: FastMCP, ha: HAClient, ws: HAWebSocketClient, admin: bool) -> 
 
     # -- Group D: device registry (mutations) --------------------------------
 
-    @mcp.tool()
+    @mcp.tool(annotations=mutation("Update Device", idempotent=True))
     async def update_device(
         device_id: str,
         name_by_user: str | None = None,
@@ -230,7 +239,7 @@ def register(mcp: FastMCP, ha: HAClient, ws: HAWebSocketClient, admin: bool) -> 
 
     # -- Group F: label registry (mutations) ---------------------------------
 
-    @mcp.tool()
+    @mcp.tool(annotations=mutation("Create Label"))
     async def create_label(
         name: str,
         color: str | None = None,
@@ -251,7 +260,7 @@ def register(mcp: FastMCP, ha: HAClient, ws: HAWebSocketClient, admin: bool) -> 
         fields = _drop_none(color=color, icon=icon, description=description)
         return await ws.ws_command("config/label_registry/create", name=name, **fields)
 
-    @mcp.tool()
+    @mcp.tool(annotations=mutation("Update Label", idempotent=True))
     async def update_label(
         label_id: str,
         name: str | None = None,
@@ -273,7 +282,9 @@ def register(mcp: FastMCP, ha: HAClient, ws: HAWebSocketClient, admin: bool) -> 
             "config/label_registry/update", label_id=label_id, **fields
         )
 
-    @mcp.tool()
+    @mcp.tool(
+        annotations=mutation("Delete Label", destructive=True, idempotent=True)
+    )
     async def delete_label(label_id: str, confirm: bool = False) -> dict:
         """Delete a label.
 
@@ -289,7 +300,7 @@ def register(mcp: FastMCP, ha: HAClient, ws: HAWebSocketClient, admin: bool) -> 
 
     # -- Group F: category registry (mutations) ------------------------------
 
-    @mcp.tool()
+    @mcp.tool(annotations=mutation("Create Category"))
     async def create_category(
         scope: str, name: str, icon: str | None = None
     ) -> dict:
@@ -305,7 +316,7 @@ def register(mcp: FastMCP, ha: HAClient, ws: HAWebSocketClient, admin: bool) -> 
             "config/category_registry/create", scope=scope, name=name, **fields
         )
 
-    @mcp.tool()
+    @mcp.tool(annotations=mutation("Update Category", idempotent=True))
     async def update_category(
         scope: str,
         category_id: str,
@@ -328,7 +339,9 @@ def register(mcp: FastMCP, ha: HAClient, ws: HAWebSocketClient, admin: bool) -> 
             **fields,
         )
 
-    @mcp.tool()
+    @mcp.tool(
+        annotations=mutation("Delete Category", destructive=True, idempotent=True)
+    )
     async def delete_category(
         scope: str, category_id: str, confirm: bool = False
     ) -> dict:
