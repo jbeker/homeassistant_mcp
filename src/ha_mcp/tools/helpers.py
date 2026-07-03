@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ha_mcp.tools._annotations import mutation, read_only
 from ha_mcp.ws_client import HAToolError
 
 if TYPE_CHECKING:
@@ -48,7 +49,7 @@ def _check_domain(helper_domain: str) -> None:
 
 
 def register(mcp: FastMCP, ws: HAWebSocketClient, admin: bool) -> None:
-    @mcp.tool()
+    @mcp.tool(annotations=read_only("List Helpers"))
     async def list_helpers(helper_domain: str) -> list[dict]:
         """List storage-collection helpers of a given domain.
 
@@ -62,7 +63,7 @@ def register(mcp: FastMCP, ws: HAWebSocketClient, admin: bool) -> None:
     if not admin:
         return
 
-    @mcp.tool()
+    @mcp.tool(annotations=mutation("Create Helper"))
     async def create_helper(helper_domain: str, fields: dict) -> dict:
         """Create a helper. Returns the created helper.
 
@@ -76,7 +77,7 @@ def register(mcp: FastMCP, ws: HAWebSocketClient, admin: bool) -> None:
         _check_domain(helper_domain)
         return await ws.ws_command(f"{helper_domain}/create", **fields)
 
-    @mcp.tool()
+    @mcp.tool(annotations=mutation("Update Helper", idempotent=True))
     async def update_helper(helper_domain: str, helper_id: str, fields: dict) -> dict:
         """Update a helper. Returns the updated helper.
 
@@ -90,7 +91,9 @@ def register(mcp: FastMCP, ws: HAWebSocketClient, admin: bool) -> None:
             f"{helper_domain}/update", **{f"{helper_domain}_id": helper_id}, **fields
         )
 
-    @mcp.tool()
+    @mcp.tool(
+        annotations=mutation("Delete Helper", destructive=True, idempotent=True)
+    )
     async def delete_helper(
         helper_domain: str, helper_id: str, confirm: bool = False
     ) -> dict:

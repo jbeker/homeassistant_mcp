@@ -4,13 +4,17 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ha_mcp.tools._annotations import mutation
+
 if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
     from ha_mcp.client import HAClient
 
 
 def register(mcp: FastMCP, ha: HAClient) -> None:
-    @mcp.tool()
+    @mcp.tool(
+        annotations=mutation("Set Entity State", destructive=True, idempotent=True)
+    )
     async def set_entity_state(
         entity_id: str,
         state: str,
@@ -28,7 +32,7 @@ def register(mcp: FastMCP, ha: HAClient) -> None:
             payload["attributes"] = attributes
         return await ha.post(f"/api/states/{entity_id}", json=payload)
 
-    @mcp.tool()
+    @mcp.tool(annotations=mutation("Fire Event"))
     async def fire_event(
         event_type: str,
         event_data: dict | None = None,
@@ -41,7 +45,7 @@ def register(mcp: FastMCP, ha: HAClient) -> None:
         """
         return await ha.post(f"/api/events/{event_type}", json=event_data or {})
 
-    @mcp.tool()
+    @mcp.tool(annotations=mutation("Handle Intent", destructive=True))
     async def handle_intent(
         name: str,
         data: dict | None = None,
@@ -57,7 +61,9 @@ def register(mcp: FastMCP, ha: HAClient) -> None:
             payload["data"] = data
         return await ha.post("/api/intent/handle", json=payload)
 
-    @mcp.tool()
+    @mcp.tool(
+        annotations=mutation("Delete Entity State", destructive=True, idempotent=True)
+    )
     async def delete_entity_state(entity_id: str) -> dict:
         """Delete an entity's state from Home Assistant.
 

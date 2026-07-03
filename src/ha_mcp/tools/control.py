@@ -4,13 +4,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ha_mcp.tools._annotations import mutation
+
 if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
     from ha_mcp.client import HAClient
 
 
 def register(mcp: FastMCP, ha: HAClient) -> None:
-    @mcp.tool()
+    @mcp.tool(annotations=mutation("Call Service", destructive=True))
     async def call_service(
         domain: str,
         service: str,

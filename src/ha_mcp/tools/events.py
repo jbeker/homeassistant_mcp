@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
+from ha_mcp.tools._annotations import read_only
 from ha_mcp.ws_client import WS_CLOSED, HAWebSocketError
 
 if TYPE_CHECKING:
@@ -33,7 +34,7 @@ def _trigger_to_state(event: object) -> str | None:
 
 
 def register(mcp: FastMCP, ha: HAClient, ws: HAWebSocketClient) -> None:
-    @mcp.tool()
+    @mcp.tool(annotations=read_only("Wait For State"))
     async def wait_for_state(
         entity_id: str, target_state: str, timeout_seconds: float = 30.0
     ) -> dict:
