@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Jeremy Beker <gothmog@confusticate.com>
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Backup tools over the WebSocket API — Group H.
 
 Listing backups is a read; creating, deleting, and restoring are admin-only.

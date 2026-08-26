@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Jeremy Beker <gothmog@confusticate.com>
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Shared fixtures: a fake Home Assistant WebSocket server.
 
 The fake server performs the real auth handshake and then dispatches commands to

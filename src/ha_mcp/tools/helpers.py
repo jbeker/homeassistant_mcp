@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Jeremy Beker <gothmog@confusticate.com>
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Helper (input_*) tools over the WebSocket API — Group E.
 
 Helpers backed by storage collections expose list/create/update/delete WebSocket

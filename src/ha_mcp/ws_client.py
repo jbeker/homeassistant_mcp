@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Jeremy Beker <gothmog@confusticate.com>
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Persistent WebSocket client for the Home Assistant WebSocket API.
 
 The REST API does not expose the configuration/registry layer. Registry commands

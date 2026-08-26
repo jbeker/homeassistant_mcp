@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Jeremy Beker <gothmog@confusticate.com>
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """Registry tools over the WebSocket API — entity (A), area (C), device (D).
 
 Read tools (list/get) register in every mode. Mutating tools register only when
