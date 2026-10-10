@@ -3,7 +3,8 @@
 An MCP server for Home Assistant. It wraps the REST API for states, services,
 events, history, templates, and calendars, and adds a WebSocket-backed layer for
 the configuration/registry operations the REST API does not expose (entity
-renames, automation/script/scene editing, area and device registry edits).
+renames, automation/script/scene editing, area and device registry edits,
+dashboard editing).
 
 ## Configuration
 
@@ -26,7 +27,7 @@ uv run ha-mcp --mode <mode>
 
 | Mode | Tools exposed |
 | --- | --- |
-| `read-only` (default) | REST reads, plus registry/config **reads**: `list_entity_registry`, `get_entity_registry_entry`, `get_*_config`, `list_labels`, `list_categories`, `list_helpers`, `list_config_entries`, `list_backups`, and `wait_for_state` |
+| `read-only` (default) | REST reads, plus registry/config **reads**: `list_entity_registry`, `get_entity_registry_entry`, `get_*_config`, `list_labels`, `list_categories`, `list_helpers`, `list_config_entries`, `list_backups`, `list_dashboards`, `get_dashboard_config`, `list_dashboard_resources`, and `wait_for_state` |
 | `control-only` | read-only + `call_service` |
 | `read-write` | control-only + REST state/event writes |
 | `admin` | read-write + registry/config **mutations** (below) |
@@ -42,11 +43,18 @@ uv run ha-mcp --mode <mode>
 - **Config flows (create a new integration entry):** `start_config_flow`, `submit_config_flow_step`, `get_config_flow`, `abort_config_flow`
 - **Options flows (edit an existing entry):** `start_options_flow`, `submit_options_flow_step`, `get_options_flow`, `abort_options_flow`
 - **Backups:** `create_backup`, `delete_backup`, `restore_backup`
+- **Dashboards:** `create_dashboard`/`update_dashboard`/`delete_dashboard`,
+  `save_dashboard_config`/`delete_dashboard_config`,
+  `set_dashboard_view`/`delete_dashboard_view`,
+  `set_dashboard_card`/`delete_dashboard_card`,
+  `create_dashboard_resource`/`update_dashboard_resource`/`delete_dashboard_resource`
 
 Destructive operations (`remove_entity_registry_entry`, `delete_area`,
 `delete_*_config`, `delete_helper`, `delete_label`, `delete_category`,
 `delete_config_entry`, `abort_config_flow`, `abort_options_flow`,
-`delete_backup`, `restore_backup`) require an explicit `confirm: true` argument
+`delete_backup`, `restore_backup`, `delete_dashboard`, `delete_dashboard_config`,
+`delete_dashboard_view`, `delete_dashboard_card`, `delete_dashboard_resource`)
+require an explicit `confirm: true` argument
 and refuse to run without it. `restore_backup` is especially high risk — it can
 interrupt the running instance. Renaming an entity migrates its recorder history
 automatically.
@@ -67,6 +75,34 @@ writable config object:
    A `form` with a populated `errors` field means the input was rejected.
 3. After `create_entry`, assign the new entities/device to an area with
    `update_entity_registry_entry` or `update_device` (area is not part of the flow).
+
+### Editing dashboards
+
+Dashboards are edited at three levels, all over the WebSocket API:
+
+- **Whole config:** `get_dashboard_config` / `save_dashboard_config` read and
+  replace the full `{"views": [...]}` document.
+- **One view:** `set_dashboard_view` adds (or, with `view_ref`, replaces) a
+  view; `delete_dashboard_view` removes one.
+- **One card:** `set_dashboard_card` appends (or, with `card_index`, replaces)
+  a card in a view; `delete_dashboard_card` removes one.
+
+Conventions:
+
+- `url_path=None` (the default) addresses the default Overview dashboard. Other
+  dashboards use the `url_path` reported by `list_dashboards`, which does not
+  list the default one.
+- `view_ref` is either an integer index into `views` or the view's `path`.
+- Views with `type: "sections"` keep cards inside `sections[i].cards`, so the
+  card tools require a `section` index for them and reject it for other views.
+- A default dashboard that has never been edited is auto-generated and has no
+  stored config; `get_dashboard_config` reports `config_not_found` for it. Take
+  control by writing a full config with `save_dashboard_config` first.
+- `create_dashboard` makes an empty dashboard; `url_path` must contain a hyphen
+  unless `allow_single_word` is set.
+- `update_dashboard` and `delete_dashboard` take the dashboard's `id` from
+  `list_dashboards`, which is a slug (`garden_view`), not the `url_path`
+  (`garden-view`).
 
 ### Waiting for a state
 

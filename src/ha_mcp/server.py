@@ -11,7 +11,17 @@ from typing import AsyncIterator
 from mcp.server.fastmcp import FastMCP
 
 from ha_mcp.client import HAClient
-from ha_mcp.tools import read, control, write, registry, config_edit, helpers, backups, events
+from ha_mcp.tools import (
+    backups,
+    config_edit,
+    control,
+    dashboards,
+    events,
+    helpers,
+    read,
+    registry,
+    write,
+)
 from ha_mcp.ws_client import HAWebSocketClient
 
 
@@ -56,6 +66,7 @@ def create_server(mode: str, ha_url: str, ha_token: str) -> FastMCP:
     config_edit.register(mcp, ha_client, ws_client, admin=is_admin)
     helpers.register(mcp, ws_client, admin=is_admin)
     backups.register(mcp, ws_client, admin=is_admin)
+    dashboards.register(mcp, ws_client, admin=is_admin)
     events.register(mcp, ha_client, ws_client)
 
     return mcp
